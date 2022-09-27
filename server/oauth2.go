@@ -20,11 +20,11 @@ import (
 	"strings"
 	"time"
 
-	jose "gopkg.in/square/go-jose.v2"
-
 	"github.com/dexidp/dex/connector"
+	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/server/internal"
 	"github.com/dexidp/dex/storage"
+	jose "gopkg.in/square/go-jose.v2"
 )
 
 // TODO(ericchiang): clean this file up and figure out more idiomatic error handling.
@@ -410,6 +410,8 @@ func (s *Server) newIDToken(clientID string, claims storage.Claims, scopes []str
 
 // parse the initial request from the OAuth2 client.
 func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthRequest, error) {
+	s.logger.Infof("Navya_debug: http request= %v", r)
+
 	if err := r.ParseForm(); err != nil {
 		return nil, newDisplayedErr(http.StatusBadRequest, "Failed to parse request.")
 	}
@@ -418,6 +420,8 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 	if err != nil {
 		return nil, newDisplayedErr(http.StatusBadRequest, "No redirect_uri provided.")
 	}
+
+	s.logger.Infof("Navya_debug: q = %v, redirectURI", r, redirectURI)
 
 	clientID := q.Get("client_id")
 	state := q.Get("state")
@@ -443,7 +447,7 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 		return nil, newDisplayedErr(http.StatusInternalServerError, "Database error.")
 	}
 
-	if !validateRedirectURI(client, redirectURI) {
+	if !validateRedirectURI(client, redirectURI, s.logger) {
 		return nil, newDisplayedErr(http.StatusBadRequest, "Unregistered redirect_uri (%q).", redirectURI)
 	}
 	if redirectURI == deviceCallbackURI && client.Public {
@@ -606,7 +610,8 @@ func (s *Server) validateCrossClientTrust(clientID, peerID string) (trusted bool
 	return false, nil
 }
 
-func validateRedirectURI(client storage.Client, redirectURI string) bool {
+func validateRedirectURI(client storage.Client, redirectURI string, logger log.Logger) bool {
+	logger.Infof("Navya_debug: client %v, redirectURI %s", client, redirectURI)
 	// Allow named RedirectURIs for both public and non-public clients.
 	// This is required make PKCE-enabled web apps work, when configured as public clients.
 	for _, uri := range client.RedirectURIs {
@@ -617,6 +622,7 @@ func validateRedirectURI(client storage.Client, redirectURI string) bool {
 	// For non-public clients or when RedirectURIs is set, we allow only explicitly named RedirectURIs.
 	// Otherwise, we check below for special URIs used for desktop or mobile apps.
 	if !client.Public || len(client.RedirectURIs) > 0 {
+		logger.Infof("Navya_debug 621: client %v, redirectURI %s", client, redirectURI)
 		return false
 	}
 
@@ -636,6 +642,7 @@ func validateRedirectURI(client storage.Client, redirectURI string) bool {
 		return true
 	}
 	host, _, err := net.SplitHostPort(u.Host)
+	logger.Infof("Navya_debug 641: err %v, host %v, client %v, redirectURI %s", err, host, client, redirectURI)
 	return err == nil && host == "localhost"
 }
 
